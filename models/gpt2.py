@@ -41,10 +41,6 @@ class GPT2Model(GPTPreTrainedModel):
             [GPT2Layer(config) for _ in range(config.num_hidden_layers)]
         )
 
-        # [CLS] token transformations.
-        self.pooler_dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.pooler_af = nn.Tanh()
-
         # Final layer norm.
         self.final_layer_norm = nn.LayerNorm(
             config.hidden_size, eps=config.layer_norm_eps
@@ -122,10 +118,10 @@ class GPT2Model(GPTPreTrainedModel):
         """
 
         # Get the embedding for each input token.
-        embedding_output = self.embed(input_ids=input_ids)
+        embedding_output = self.embed(input_ids)
 
         # Feed to a transformer (a stack of GPTLayers).
-        sequence_output = self.encode(embedding_output, attention_mask=attention_mask)
+        sequence_output = self.encode(embedding_output, attention_mask)
         sequence_output = self.final_layer_norm(sequence_output)
 
         # Get the hidden state of the final token.

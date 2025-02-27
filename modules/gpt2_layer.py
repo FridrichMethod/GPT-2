@@ -53,8 +53,8 @@ class GPT2Layer(nn.Module):
 
         Returns:
         --------
-        residual: torch.Tensor
-            The residual connection output after applying the add-norm.
+        output_tensor: torch.Tensor
+            The output tensor after applying the add-norm.
 
 
         Notes:
@@ -67,9 +67,9 @@ class GPT2Layer(nn.Module):
 
         output_tensor = dense_layer(output_tensor)
         output_tensor = dropout(output_tensor)
-        residual = input_tensor + output_tensor
+        output_tensor += input_tensor
 
-        return residual
+        return output_tensor
 
     def forward(
         self, hidden_states: torch.Tensor, attention_mask: torch.Tensor

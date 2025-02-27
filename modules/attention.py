@@ -30,6 +30,11 @@ class CausalSelfAttention(nn.Module):
         # observe that it yields better performance.
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
 
+        causal_mask = torch.tril(
+            torch.ones(config.max_position_embeddings, config.max_position_embeddings)
+        )
+        self.register_buffer("causal_mask", causal_mask)
+
     def transform(self, x: torch.Tensor, linear_layer: nn.Linear) -> torch.Tensor:
         """This function projects the hidden state to key, value, query for multi-head attention.
 
@@ -82,7 +87,8 @@ class CausalSelfAttention(nn.Module):
         """
 
         attn_scores = torch.einsum("b h i d, b h j d -> b h i j", query, key)
-        attn_scores /= self.attention_head_size**0.5
+        attn_scores /= torch.tensor(self.attention_head_size).sqrt()
+        attn_scores.masked_fill_(self.causal_mask[: attn_scores.size(-2), : attn_scores.size(-1)] == 0, float("-inf"))
         attn_scores += attention_mask
         attn_probs = F.softmax(attn_scores, dim=-1)
         attn_probs = self.dropout(attn_probs)
