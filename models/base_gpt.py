@@ -1,4 +1,4 @@
-from torch import dtype
+from torch import dtype, nn
 
 from config import PretrainedConfig
 from utils import *
