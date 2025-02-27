@@ -18,8 +18,8 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
 
         self.num_attention_heads = config.num_attention_heads
-        self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
-        self.all_head_size = self.num_attention_heads * self.attention_head_size
+        self.attention_head_size = config.hidden_size // config.num_attention_heads
+        self.all_head_size = config.hidden_size
 
         # Initialize the linear transformation layers for key, value, query.
         self.query = nn.Linear(config.hidden_size, self.all_head_size)
@@ -81,19 +81,12 @@ class CausalSelfAttention(nn.Module):
             The attention value tensor.
         """
 
-        # Calculate the attention scores.
         attn_scores = torch.einsum("b h i d, b h j d -> b h i j", query, key)
-        # Normalize the attention scores.
-        attn_scores = attn_scores / (self.attention_head_size**0.5)
-        # Apply the attention mask.
-        attn_scores = attn_scores + attention_mask
-        # Apply the softmax function to the attention scores.
+        attn_scores /= self.attention_head_size**0.5
+        attn_scores += attention_mask
         attn_probs = F.softmax(attn_scores, dim=-1)
-        # Apply dropout to the attention probabilities.
         attn_probs = self.dropout(attn_probs)
-        # Calculate the attention value.
         attn_value = torch.einsum("b h i j, b h j d -> b h i d", attn_probs, value)
-        # Merge
         attn_value = rearrange(attn_value, "b h t d -> b t (h d)")
 
         return attn_value

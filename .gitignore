@@ -168,3 +168,4 @@ cython_debug/
 *.pkl
 .idea/
 out/
+test/
