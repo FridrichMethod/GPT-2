@@ -1,5 +1,4 @@
-"""
-Paraphrase detection for GPT starter code.
+"""Paraphrase detection for GPT starter code.
 
 Consider:
  - ParaphraseGPT: Your implementation of the GPT-2 classification model.
@@ -60,9 +59,10 @@ class ParaphraseGPT(nn.Module):
         for param in self.gpt.parameters():
             param.requires_grad = True
 
-    def forward(self, input_ids, attention_mask):
-        """
-        TODO: Predict the label of the token using the paraphrase_detection_head Linear layer.
+    def forward(
+        self, input_ids: torch.Tensor, attention_mask: torch.Tensor
+    ) -> torch.Tensor:
+        """Predict the label of the token using the paraphrase_detection_head Linear layer.
 
         We structure the input as:
 
@@ -70,12 +70,15 @@ class ParaphraseGPT(nn.Module):
 
         So you want to find the prediction for the next token at the end of this sentence. Optimistically, it will be the
         token "yes" (byte pair encoding index of 8505) for examples that are paraphrases or "no" (byte pair encoding index
-         of 3919) for examples that are not paraphrases.
+        of 3919) for examples that are not paraphrases.
+
+        Takes a batch of sentences and produces embeddings for them.
         """
 
-        "Takes a batch of sentences and produces embeddings for them."
-        ### YOUR CODE HERE
-        raise NotImplementedError
+        last_token = self.gpt(input_ids, attention_mask)["last_token"]
+        logits = self.gpt.hidden_state_to_token(last_token)
+
+        return logits
 
 
 def save_model(model, optimizer, args, filepath):
@@ -248,10 +251,11 @@ def get_args():
     )
 
     args = parser.parse_args()
+
     return args
 
 
-def add_arguments(args):
+def add_arguments(args: argparse.Namespace) -> argparse.Namespace:
     """Add arguments that are deterministic on model size."""
     if args.model_size == "gpt2":
         args.d = 768
@@ -266,7 +270,8 @@ def add_arguments(args):
         args.l = 36
         args.num_heads = 20
     else:
-        raise Exception(f"{args.model_size} is not supported.")
+        raise ValueError(f"{args.model_size} is not supported.")
+
     return args
 
 

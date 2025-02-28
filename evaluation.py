@@ -9,7 +9,7 @@ model_test_paraphrase is suitable for the test dataloader where label informatio
 
 import numpy as np
 import torch
-from sacrebleu.metrics import CHRF
+from sacrebleu.metrics.chrf import CHRF
 from sklearn.metrics import accuracy_score, f1_score
 from tqdm import tqdm
 
