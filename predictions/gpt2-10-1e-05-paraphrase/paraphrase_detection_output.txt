@@ -1,0 +1,24 @@
+Loaded 283003 train examples from data/quora-train.csv
+Loaded 40429 train examples from data/quora-dev.csv
+save the model to gpt2-10-1e-05-paraphrase.pt
+Epoch 0: train loss :: 0.429, dev acc :: 0.849
+save the model to gpt2-10-1e-05-paraphrase.pt
+Epoch 1: train loss :: 0.320, dev acc :: 0.870
+save the model to gpt2-10-1e-05-paraphrase.pt
+Epoch 2: train loss :: 0.282, dev acc :: 0.878
+save the model to gpt2-10-1e-05-paraphrase.pt
+Epoch 3: train loss :: 0.254, dev acc :: 0.882
+save the model to gpt2-10-1e-05-paraphrase.pt
+Epoch 4: train loss :: 0.229, dev acc :: 0.885
+save the model to gpt2-10-1e-05-paraphrase.pt
+Epoch 5: train loss :: 0.206, dev acc :: 0.889
+save the model to gpt2-10-1e-05-paraphrase.pt
+Epoch 6: train loss :: 0.186, dev acc :: 0.894
+Epoch 7: train loss :: 0.166, dev acc :: 0.894
+Epoch 8: train loss :: 0.148, dev acc :: 0.894
+save the model to gpt2-10-1e-05-paraphrase.pt
+Epoch 9: train loss :: 0.132, dev acc :: 0.894
+Loaded model to test from gpt2-10-1e-05-paraphrase.pt
+Loaded 40429 train examples from data/quora-dev.csv
+Loaded 80858 test examples from data/quora-test-student.csv
+dev paraphrase acc :: 0.894

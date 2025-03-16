@@ -205,6 +205,9 @@ class PretrainedConfig:
 
         return config_dict, kwargs
 
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
+
 
 class GPT2Config(PretrainedConfig):
     model_type = "gpt"
@@ -246,3 +249,4 @@ class GPT2Config(PretrainedConfig):
         self.gradient_checkpointing = gradient_checkpointing
         self.position_embedding_type = position_embedding_type
         self.use_cache = use_cache
+        self.use_lora = False

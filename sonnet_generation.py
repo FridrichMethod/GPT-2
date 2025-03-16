@@ -1,7 +1,7 @@
 """Sonnet generation starter code.
 
 Running:
-    >>> python sonnet_generation.py --use_gpu
+    >>> python sonnet_generation.py --use_gpu [--use_lora]
 
 trains your SonnetGPT model and writes the required submission files.
 """
@@ -16,7 +16,7 @@ from einops import rearrange
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from transformers import GPT2Tokenizer
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
 
 from datasets import SonnetsDataset
 from models.gpt2 import GPT2Model
@@ -42,15 +42,38 @@ class SonnetGPT(nn.Module):
     def __init__(self, args: argparse.Namespace) -> None:
         """Initialize the SonnetGPT model."""
         super().__init__()
-        self.gpt = GPT2Model.from_pretrained(
-            model=args.model_size, d=args.d, l=args.l, num_heads=args.num_heads
-        )
+        if args.use_lora:
+            self.gpt = GPT2Model.from_pretrained(
+                model=args.model_size,
+                d=args.d,
+                l=args.l,
+                num_heads=args.num_heads,
+                use_lora=args.use_lora,
+                lora_r=args.lora_r,
+                lora_alpha=args.lora_alpha,
+                lora_dropout=args.lora_dropout,
+            )
+        else:
+            self.gpt = GPT2Model.from_pretrained(
+                model=args.model_size,
+                d=args.d,
+                l=args.l,
+                num_heads=args.num_heads,
+                use_lora=args.use_lora,
+            )
+        # self.gpt = GPT2LMHeadModel.from_pretrained(args.model_size)
+
+        # Initialize the tokenizer.
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        # By default, fine-tune the full model. TODO: this is maybe not ideal.
-        for param in self.gpt.parameters():
-            param.requires_grad = True
+        if args.use_lora:
+            for name, param in self.gpt.named_parameters():
+                if "lora_" not in name:
+                    param.requires_grad = False
+        else:
+            for param in self.gpt.parameters():
+                param.requires_grad = True
 
     def forward(
         self, input_ids: torch.Tensor, attention_mask: torch.Tensor
@@ -156,8 +179,8 @@ class SonnetGPT(nn.Module):
         top_p: float = 0.9,
         max_length: int = 128,
         beam_width: int = 3,
-        length_penalty: float = 1.0,
-        repetition_penalty: float = 1.05,
+        length_penalty: float = 1.1,
+        repetition_penalty: float = 1.1,
         **kwargs,
     ) -> str:
         """Generates an original sonnet using beam search with nucleus filtering."""
@@ -282,8 +305,7 @@ def train(args: argparse.Namespace) -> None:
     )
 
     # Create the held-out dataset: these only have the first 3 lines. Your job is to fill in the rest!
-    held_out_sonnet_dev_dataset = SonnetsDataset(args.held_out_sonnet_dev_path)
-    held_out_sonnet_dataset = SonnetsDataset(args.held_out_sonnet_path)
+    # held_out_sonnet_dev_dataset = SonnetsDataset(args.held_out_sonnet_dev_path)
 
     args = add_arguments(args)
     model = SonnetGPT(args)
@@ -295,14 +317,15 @@ def train(args: argparse.Namespace) -> None:
     # Early stopping parameters
     best_loss = float("inf")
     epochs_without_improvement = 0
-    patience = args.patience = (
-        3  # Number of epochs to wait for improvement before stopping.
-    )
+    patience = (
+        args.patience
+    )  # Number of epochs to wait for improvement before stopping.
     min_delta = (
         args.min_delta
     )  # Minimum change in the loss to qualify as an improvement.
 
     # Run for the specified number of epochs.
+    epoch = 0
     for epoch in range(args.epochs):
         model.train()
         train_loss = 0.0
@@ -349,43 +372,26 @@ def train(args: argparse.Namespace) -> None:
                 break
 
         # Generate outputs on the held-out dataset (for qualitative monitoring).
-        model.eval()
-        print("Generating several output sonnets for dev...\n\n")
-        for batch in held_out_sonnet_dev_dataset:
-            encoding = model.tokenizer(
-                batch[1], return_tensors="pt", padding=True, truncation=True
-            ).to(device)
-            output = model.generate(
-                encoding["input_ids"],
-                beam_search=args.beam_search,
-                temperature=args.temperature,
-                top_p=args.top_p,
-                max_length=128,
-                beam_width=args.beam_width,
-                length_penalty=args.length_penalty,
-                repetition_penalty=args.repetition_penalty,
-            )
-            print(output)
+        # model.eval()
+        # print("Generating several output sonnets for dev...\n\n")
+        # for batch in held_out_sonnet_dev_dataset:
+        #     encoding = model.tokenizer(
+        #         batch[1], return_tensors="pt", padding=True, truncation=True
+        #     ).to(device)
+        #     output = model.generate(
+        #         encoding["input_ids"],
+        #         beam_search=args.beam_search,
+        #         temperature=args.temperature,
+        #         top_p=args.top_p,
+        #         max_length=128,
+        #         beam_width=args.beam_width,
+        #         length_penalty=args.length_penalty,
+        #         repetition_penalty=args.repetition_penalty,
+        #     )
+        #     print(output)
 
-        print("Generating several output sonnets...\n\n")
-        for batch in held_out_sonnet_dataset:
-            encoding = model.tokenizer(
-                batch[1], return_tensors="pt", padding=True, truncation=True
-            ).to(device)
-            output = model.generate(
-                encoding["input_ids"],
-                beam_search=args.beam_search,
-                temperature=args.temperature,
-                top_p=args.top_p,
-                max_length=128,
-                beam_width=args.beam_width,
-                length_penalty=args.length_penalty,
-                repetition_penalty=args.repetition_penalty,
-            )
-            print(output)
-
-        save_model(model, optimizer, args, f"{epoch}_{args.filepath}")
-        print("\n\n")
+    save_model(model, optimizer, args, f"{args.model_size}-{args.filepath}")
+    print("\n\n")
 
 
 @torch.no_grad()
@@ -394,7 +400,7 @@ def generate_submission_sonnets(args: argparse.Namespace) -> None:
     device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
 
     # Load the model from the last epoch.
-    saved = torch.load(f"{args.epochs - 1}_{args.filepath}", weights_only=False)
+    saved = torch.load(f"{args.model_size}-{args.filepath}", weights_only=False)
 
     model = SonnetGPT(saved["args"])
     model.load_state_dict(saved["model"])
@@ -478,6 +484,12 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--use_gpu", action="store_true")
 
+    parser.add_argument(
+        "--use_lora",
+        action="store_true",
+        help="Use LoRA for parameter-efficient fine-tuning.",
+    )
+
     # Generation parameters.
     parser.add_argument(
         "--temperature", type=float, help="softmax temperature.", default=1.2
@@ -500,13 +512,13 @@ def get_args() -> argparse.Namespace:
         "--length_penalty",
         type=float,
         help="Length penalty for beam search.",
-        default=1.0,
+        default=1.1,
     )
     parser.add_argument(
         "--repetition_penalty",
         type=float,
         help="Repetition penalty for beam search.",
-        default=1.05,
+        default=1.1,
     )
 
     parser.add_argument(
@@ -527,7 +539,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         "--min_delta",
         type=float,
-        default=0.001,
+        default=0.005,
         help="Minimum change in the monitored quantity to qualify as an improvement.",
     )
 
@@ -552,6 +564,12 @@ def add_arguments(args: argparse.Namespace) -> argparse.Namespace:
         args.num_heads = 20
     else:
         raise ValueError(f"{args.model_size} is not supported.")
+
+    if args.use_lora:
+        args.lora_r = 8
+        args.lora_alpha = 32
+        args.lora_dropout = 0.1
+
     return args
 
 

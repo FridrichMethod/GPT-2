@@ -145,18 +145,34 @@ class GPT2Model(GPTPreTrainedModel):
 
     @classmethod
     def from_pretrained(
-        cls, model: str = "gpt2", d: int = 768, l: int = 12, num_heads: int = 12
+        cls,
+        model: str = "gpt2",
+        d: int = 768,
+        l: int = 12,
+        num_heads: int = 12,
+        use_lora: bool = False,
+        lora_r: int = 8,
+        lora_alpha: int = 32,
+        lora_dropout: float = 0.1,
     ) -> "GPT2Model":
         """Load the GPT-2 model from the Hugging Face library and remap the weights to our model."""
+        # Load the original Hugging Face GPT-2 model.
         gpt_model = OpenAIGPT2Model.from_pretrained(model).eval()
-        our_model = GPT2Model(
-            GPT2Config(
-                hidden_size=d,
-                num_hidden_layers=l,
-                num_attention_heads=num_heads,
-                intermediate_size=d * 3,
-            )
-        ).eval()
+
+        # Create our configuration. We add extra attributes for LoRA.
+        config = GPT2Config(
+            hidden_size=d,
+            num_hidden_layers=l,
+            num_attention_heads=num_heads,
+            intermediate_size=d * 3,
+        )
+        config.use_lora = use_lora
+        if use_lora:
+            config.lora_r = lora_r
+            config.lora_alpha = lora_alpha
+            config.lora_dropout = lora_dropout
+
+        our_model = GPT2Model(config).eval()
 
         # Load word and positional embeddings.
         our_model.word_embedding.load_state_dict(gpt_model.wte.state_dict())
@@ -164,25 +180,46 @@ class GPT2Model(GPTPreTrainedModel):
 
         for i in range(l):
             layer = our_model.gpt_layers[i]
-            # Remap the Q,K,V weights from a conv1d to 3 linear projections
-            layer.self_attention.query.weight.data = gpt_model.state_dict()[
-                f"h.{i}.attn.c_attn.weight"
-            ][:, :d].T
-            layer.self_attention.query.bias.data = gpt_model.state_dict()[
-                f"h.{i}.attn.c_attn.bias"
-            ][:d]
-            layer.self_attention.key.weight.data = gpt_model.state_dict()[
-                f"h.{i}.attn.c_attn.weight"
-            ][:, d : d * 2].T
-            layer.self_attention.key.bias.data = gpt_model.state_dict()[
-                f"h.{i}.attn.c_attn.bias"
-            ][d : d * 2]
-            layer.self_attention.value.weight.data = gpt_model.state_dict()[
-                f"h.{i}.attn.c_attn.weight"
-            ][:, d * 2 :].T
-            layer.self_attention.value.bias.data = gpt_model.state_dict()[
-                f"h.{i}.attn.c_attn.bias"
-            ][d * 2 :]
+            # Remap the Q, K, V weights.
+            if config.use_lora:
+                # For LoRA, the base linear layer is stored in the attribute 'linear'
+                layer.self_attention.query.linear.weight.data = gpt_model.state_dict()[
+                    f"h.{i}.attn.c_attn.weight"
+                ][:, :d].T
+                layer.self_attention.query.linear.bias.data = gpt_model.state_dict()[
+                    f"h.{i}.attn.c_attn.bias"
+                ][:d]
+                layer.self_attention.key.linear.weight.data = gpt_model.state_dict()[
+                    f"h.{i}.attn.c_attn.weight"
+                ][:, d : d * 2].T
+                layer.self_attention.key.linear.bias.data = gpt_model.state_dict()[
+                    f"h.{i}.attn.c_attn.bias"
+                ][d : d * 2]
+                layer.self_attention.value.linear.weight.data = gpt_model.state_dict()[
+                    f"h.{i}.attn.c_attn.weight"
+                ][:, d * 2 :].T
+                layer.self_attention.value.linear.bias.data = gpt_model.state_dict()[
+                    f"h.{i}.attn.c_attn.bias"
+                ][d * 2 :]
+            else:
+                layer.self_attention.query.weight.data = gpt_model.state_dict()[
+                    f"h.{i}.attn.c_attn.weight"
+                ][:, :d].T
+                layer.self_attention.query.bias.data = gpt_model.state_dict()[
+                    f"h.{i}.attn.c_attn.bias"
+                ][:d]
+                layer.self_attention.key.weight.data = gpt_model.state_dict()[
+                    f"h.{i}.attn.c_attn.weight"
+                ][:, d : d * 2].T
+                layer.self_attention.key.bias.data = gpt_model.state_dict()[
+                    f"h.{i}.attn.c_attn.bias"
+                ][d : d * 2]
+                layer.self_attention.value.weight.data = gpt_model.state_dict()[
+                    f"h.{i}.attn.c_attn.weight"
+                ][:, d * 2 :].T
+                layer.self_attention.value.bias.data = gpt_model.state_dict()[
+                    f"h.{i}.attn.c_attn.bias"
+                ][d * 2 :]
 
             # Remap final dense layer in MHA.
             layer.attention_dense.weight.data = gpt_model.state_dict()[

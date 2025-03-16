@@ -6,6 +6,55 @@ from torch.nn import functional as F
 from config import GPT2Config
 
 
+class LoRALinear(nn.Module):
+    """
+    A linear layer with a low-rank update.
+    Given an input x, it computes:
+         output = x @ W^T + scaling * (x @ A) @ B,
+    where W is frozen, and A and B are trainable low-rank matrices.
+    """
+
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        r: int = 8,
+        lora_alpha: int = 32,
+        lora_dropout: float = 0.1
+    ):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.r = r
+        self.lora_alpha = lora_alpha
+        self.scaling = self.lora_alpha / self.r if self.r > 0 else 1.0
+
+        # Original linear layer (frozen)
+        self.linear = nn.Linear(in_features, out_features)
+
+        # Low-rank factors (only if r > 0)
+        if r > 0:
+            # A: shape (in_features, r) and B: shape (r, out_features)
+            self.lora_A = nn.Parameter(torch.randn(in_features, r) * 0.01)
+            self.lora_B = nn.Parameter(torch.randn(r, out_features) * 0.01)
+            self.lora_dropout = (
+                nn.Dropout(p=lora_dropout) if lora_dropout > 0.0 else nn.Identity()
+            )
+        else:
+            self.lora_A = None
+            self.lora_B = None
+            self.lora_dropout = nn.Identity()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        result = self.linear(x)
+        if self.r > 0:
+            # Compute low-rank update: (x @ A) @ B and scale it.
+            lora_update = self.lora_dropout(x) @ self.lora_A @ self.lora_B
+            result += self.scaling * lora_update
+
+        return result
+
+
 class CausalSelfAttention(nn.Module):
     def __init__(self, config: GPT2Config) -> None:
         """This module implements the causal self-attention mechanism.
@@ -21,10 +70,40 @@ class CausalSelfAttention(nn.Module):
         self.attention_head_size = config.hidden_size // config.num_attention_heads
         self.all_head_size = config.hidden_size
 
-        # Initialize the linear transformation layers for key, value, query.
-        self.query = nn.Linear(config.hidden_size, self.all_head_size)
-        self.key = nn.Linear(config.hidden_size, self.all_head_size)
-        self.value = nn.Linear(config.hidden_size, self.all_head_size)
+        # Determine if LoRA is enabled.
+        self.use_lora = config.use_lora
+
+        if self.use_lora:
+            lora_r = config.lora_r
+            lora_alpha = config.lora_alpha
+            lora_dropout = config.lora_dropout
+
+            self.query = LoRALinear(
+                config.hidden_size,
+                self.all_head_size,
+                r=lora_r,
+                lora_alpha=lora_alpha,
+                lora_dropout=lora_dropout,
+            )
+            self.key = LoRALinear(
+                config.hidden_size,
+                self.all_head_size,
+                r=lora_r,
+                lora_alpha=lora_alpha,
+                lora_dropout=lora_dropout,
+            )
+            self.value = LoRALinear(
+                config.hidden_size,
+                self.all_head_size,
+                r=lora_r,
+                lora_alpha=lora_alpha,
+                lora_dropout=lora_dropout,
+            )
+        else:
+            self.query = nn.Linear(config.hidden_size, self.all_head_size)
+            self.key = nn.Linear(config.hidden_size, self.all_head_size)
+            self.value = nn.Linear(config.hidden_size, self.all_head_size)
+
         # This dropout is applied to normalized attention scores following the original
         # implementation of transformer. Although it is a bit unusual, we empirically
         # observe that it yields better performance.
@@ -88,7 +167,10 @@ class CausalSelfAttention(nn.Module):
 
         attn_scores = torch.einsum("b h i d, b h j d -> b h i j", query, key)
         attn_scores /= torch.tensor(self.attention_head_size).sqrt()
-        attn_scores.masked_fill_(self.causal_mask[: attn_scores.size(-2), : attn_scores.size(-1)] == 0, float("-inf"))
+        attn_scores.masked_fill_(
+            self.causal_mask[: attn_scores.size(-2), : attn_scores.size(-1)] == 0,
+            float("-inf"),
+        )
         attn_scores += attention_mask
         attn_probs = F.softmax(attn_scores, dim=-1)
         attn_probs = self.dropout(attn_probs)

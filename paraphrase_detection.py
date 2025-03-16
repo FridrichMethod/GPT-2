@@ -48,16 +48,33 @@ class ParaphraseGPT(nn.Module):
 
     def __init__(self, args):
         super().__init__()
-        self.gpt = GPT2Model.from_pretrained(
-            model=args.model_size, d=args.d, l=args.l, num_heads=args.num_heads
-        )
-        self.paraphrase_detection_head = nn.Linear(
-            args.d, 2
-        )  # Paraphrase detection has two outputs: 1 (yes) or 0 (no).
+        if args.use_lora:
+            self.gpt = GPT2Model.from_pretrained(
+                model=args.model_size,
+                d=args.d,
+                l=args.l,
+                num_heads=args.num_heads,
+                use_lora=args.use_lora,
+                lora_r=args.lora_r,
+                lora_alpha=args.lora_alpha,
+                lora_dropout=args.lora_dropout,
+            )
+        else:
+            self.gpt = GPT2Model.from_pretrained(
+                model=args.model_size,
+                d=args.d,
+                l=args.l,
+                num_heads=args.num_heads,
+                use_lora=args.use_lora,
+            )
 
-        # By default, fine-tune the full model.
-        for param in self.gpt.parameters():
-            param.requires_grad = True
+        if args.use_lora:
+            for name, param in self.gpt.named_parameters():
+                if "lora_" not in name:
+                    param.requires_grad = False
+        else:
+            for param in self.gpt.parameters():
+                param.requires_grad = True
 
     def forward(
         self, input_ids: torch.Tensor, attention_mask: torch.Tensor
@@ -149,7 +166,6 @@ def train(args: argparse.Namespace) -> None:
             # Compute the loss, gradients, and update the model's parameters.
             optimizer.zero_grad()
             logits = model(b_ids, b_mask)
-            preds = torch.argmax(logits, dim=1)
             loss = F.cross_entropy(logits, labels, reduction="mean")
             loss.backward()
             optimizer.step()
@@ -239,6 +255,12 @@ def get_args() -> argparse.Namespace:
     parser.add_argument("--use_gpu", action="store_true")
 
     parser.add_argument(
+        "--use_lora",
+        action="store_true",
+        help="Use LoRA for parameter-efficient fine-tuning.",
+    )
+
+    parser.add_argument(
         "--batch_size",
         help="sst: 64, cfimdb: 8 can fit a 12GB GPU",
         type=int,
@@ -275,12 +297,19 @@ def add_arguments(args: argparse.Namespace) -> argparse.Namespace:
     else:
         raise ValueError(f"{args.model_size} is not supported.")
 
+    if args.use_lora:
+        args.lora_r = 8
+        args.lora_alpha = 32
+        args.lora_dropout = 0.1
+
     return args
 
 
 if __name__ == "__main__":
     args = get_args()
-    args.filepath = f"{args.model_size}-{args.epochs}-{args.lr}-paraphrase.pt"  # Save path.
+    args.filepath = (
+        f"{args.model_size}-{args.epochs}-{args.lr}-paraphrase.pt"  # Save path.
+    )
     seed_everything(args.seed)  # Fix the seed for reproducibility.
     train(args)
     test(args)

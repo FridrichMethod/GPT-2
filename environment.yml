@@ -9,6 +9,7 @@ dependencies:
       - einops==0.8.1
       - filelock==3.17.0
       - importlib_metadata==8.6.1
+      - peft==0.14.0
       - requests==2.32.3
       - sacrebleu==2.5.1
       - scikit-learn==1.6.1
