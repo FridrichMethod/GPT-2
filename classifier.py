@@ -2,6 +2,7 @@
 
 import argparse
 import csv
+import os
 import random
 from types import SimpleNamespace
 from typing import List, Tuple, Union
@@ -57,7 +58,9 @@ class GPT2SentimentClassifier(torch.nn.Module):
         self.dropout = torch.nn.Dropout(config.hidden_dropout_prob)
         self.classifier = torch.nn.Linear(config.hidden_size, config.num_labels)
 
-    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, input_ids: torch.Tensor, attention_mask: torch.Tensor
+    ) -> torch.Tensor:
         """Takes a batch of sentences and returns logits for sentiment classes"""
         outputs = self.gpt(input_ids, attention_mask)
         last_token_embedding = outputs["last_token"]  # shape: [batch_size, hidden_size]
@@ -148,9 +151,7 @@ class SentimentTestDataset(Dataset):
 
 
 # Load the data: a list of (sentence, label).
-def load_data(
-    filename: str, flag: str = "train"
-) -> Union[Tuple[List, int], List]:
+def load_data(filename: str, flag: str = "train") -> Union[Tuple[List, int], List]:
     num_labels = {}
     data = []
     if flag == "test":
@@ -294,8 +295,11 @@ def train(args: SimpleNamespace) -> None:
         data_dir=".",
         fine_tune_mode=args.fine_tune_mode,
     )
-
     model = GPT2SentimentClassifier(config)
+    if os.path.exists(args.filepath):
+        saved = torch.load(args.filepath, weights_only=False)
+        model.load_state_dict(saved["model"])
+        print(f"load model from {args.filepath}")
     model = model.to(device)
 
     lr = args.lr

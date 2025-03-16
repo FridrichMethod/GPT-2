@@ -1,0 +1,11 @@
+einops==0.8.1
+filelock==3.17.0
+importlib_metadata==8.6.1
+requests==2.32.3
+sacrebleu==2.5.1
+scikit-learn==1.6.1
+# torch==2.5.1 --index-url https://download.pytorch.org/whl/cu124
+# torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
+# torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu124
+tqdm==4.67.1
+transformers==4.49.0
