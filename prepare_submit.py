@@ -1,4 +1,4 @@
-# Creates a zip file for submission on Gradescope.
+"""Creates a zip file for submission on Gradescope."""
 
 import os
 import zipfile

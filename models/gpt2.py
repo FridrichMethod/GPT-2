@@ -19,7 +19,7 @@ class GPT2Model(GPTPreTrainedModel):
     3. A linear transformation layer for the [CLS] token (used in self.forward, as given).
     """
 
-    def __init__(self, config: GPT2Config):
+    def __init__(self, config: GPT2Config) -> None:
         super().__init__(config)
         self.config = config
 

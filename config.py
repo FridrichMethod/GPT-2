@@ -1,4 +1,5 @@
-"""
+"""Configuration classes for GPT-2.
+
 This module contains the implementation of a base configuration class (`PretrainedConfig`)
 and a specific configuration classes (`GPT2Config`) for managing the hyperparameters
 and architecture details of our GPT-2 model.
@@ -11,7 +12,7 @@ from typing import Any, Dict, Tuple, Union
 from utils import CONFIG_NAME, cached_path, hf_bucket_url, is_remote_url
 
 
-class PretrainedConfig(object):
+class PretrainedConfig:
     model_type: str = ""
     is_composition: bool = False
 

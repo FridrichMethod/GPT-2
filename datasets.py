@@ -1,7 +1,5 @@
-# !/usr/bin/env python3
+"""Dataset class for Quora paraphrase detection.
 
-
-"""
 This file contains our Dataset class for Quora paraphrase detection. You may want to modify this file to train on
 additional sources of data, or if you change how the Quora dataset is processed (i.e. data augmentation, etc.).
 """
@@ -14,7 +12,8 @@ from torch.utils.data import Dataset
 from transformers import GPT2Tokenizer
 
 
-def preprocess_string(s):
+def preprocess_string(s: str) -> str:
+    """Preprocesses a string for paraphrase detection."""
     return " ".join(
         s.lower()
         .replace(".", " .")
@@ -108,7 +107,7 @@ class ParaphraseDetectionTestDataset(Dataset):
         return batched_data
 
 
-def load_paraphrase_data(paraphrase_filename, split="train"):
+def load_paraphrase_data(paraphrase_filename:str, split:str="train"):
     paraphrase_data = []
     if split == "test":
         with open(paraphrase_filename, "r") as fp:

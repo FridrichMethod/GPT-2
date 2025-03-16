@@ -6,7 +6,7 @@ Consider:
  - test: Test procedure. This function generates the required files for your submission.
 
 Running:
-  `python paraphrase_detection.py --use_gpu`
+    >>> python paraphrase_detection.py --use_gpu
 trains and evaluates your ParaphraseGPT model and writes the required submission files.
 """
 
@@ -81,7 +81,9 @@ class ParaphraseGPT(nn.Module):
         return logits
 
 
-def save_model(model, optimizer, args, filepath):
+def save_model(
+    model: ParaphraseGPT, optimizer: AdamW, args: argparse.Namespace, filepath: str
+) -> None:
     save_info = {
         "model": model.state_dict(),
         "optim": optimizer.state_dict(),
@@ -95,7 +97,7 @@ def save_model(model, optimizer, args, filepath):
     print(f"save the model to {filepath}")
 
 
-def train(args):
+def train(args: argparse.Namespace) -> None:
     """Train GPT-2 for paraphrase detection on the Quora dataset."""
     device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
     # Create the data and its corresponding datasets and dataloader.
@@ -157,7 +159,7 @@ def train(args):
 
         train_loss = train_loss / num_batches
 
-        dev_acc, dev_f1, *_ = model_eval_paraphrase(para_dev_dataloader, model, device)
+        dev_acc, *_ = model_eval_paraphrase(para_dev_dataloader, model, device)
 
         if dev_acc > best_dev_acc:
             best_dev_acc = dev_acc
@@ -169,10 +171,10 @@ def train(args):
 
 
 @torch.no_grad()
-def test(args):
+def test(args: argparse.Namespace) -> None:
     """Evaluate your model on the dev and test datasets; save the predictions to disk."""
     device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
-    saved = torch.load(args.filepath)
+    saved = torch.load(args.filepath, weights_only=False)
 
     model = ParaphraseGPT(saved["args"])
     model.load_state_dict(saved["model"])
@@ -218,7 +220,8 @@ def test(args):
             f.write(f"{p}, {s} \n")
 
 
-def get_args():
+def get_args() -> argparse.Namespace:
+    """Get the arguments for the script."""
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--para_train", type=str, default="data/quora-train.csv")

@@ -1,13 +1,10 @@
-#!/usr/bin/env python3
-
-"""
-Trains and evaluates GPT2SentimentClassifier on SST and CFIMDB
-"""
+"""Trains and evaluates GPT2SentimentClassifier on SST and CFIMDB"""
 
 import argparse
 import csv
 import random
 from types import SimpleNamespace
+from typing import List, Tuple, Union
 
 import numpy as np
 import torch
@@ -24,7 +21,7 @@ TQDM_DISABLE = False
 
 
 # Fix the random seed.
-def seed_everything(seed=11711):
+def seed_everything(seed: int = 11711) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -35,38 +32,40 @@ def seed_everything(seed=11711):
 
 
 class GPT2SentimentClassifier(torch.nn.Module):
-    """
-    This module performs sentiment classification using GPT2 in a cloze-style (fill-in-the-blank) task.
+    """This module performs sentiment classification using GPT2 in a cloze-style (fill-in-the-blank) task.
 
     In the SST dataset, there are 5 sentiment categories (from 0 - "negative" to 4 - "positive").
     Thus, your forward() should return one logit for each of the 5 classes.
     """
 
-    def __init__(self, config):
-        super(GPT2SentimentClassifier, self).__init__()
+    def __init__(self, config: SimpleNamespace) -> None:
+        super().__init__()
         self.num_labels = config.num_labels
         self.gpt = GPT2Model.from_pretrained()
 
-        # Pretrain mode does not require updating GPT paramters.
-        assert config.fine_tune_mode in ["last-linear-layer", "full-model"]
-        for param in self.gpt.parameters():
-            if config.fine_tune_mode == "last-linear-layer":
+        # Pretrain mode does not require updating GPT parameters.
+        if config.fine_tune_mode == "last-linear-layer":
+            for param in self.gpt.parameters():
                 param.requires_grad = False
-            elif config.fine_tune_mode == "full-model":
+        elif config.fine_tune_mode == "full-model":
+            for param in self.gpt.parameters():
                 param.requires_grad = True
+        else:
+            raise ValueError("Unknown fine-tune mode")
 
-        ### TODO: Create any instance variables you need to classify the sentiment of BERT embeddings.
-        ### YOUR CODE HERE
-        raise NotImplementedError
+        # Create dropout and linear classifier layer.
+        self.dropout = torch.nn.Dropout(config.hidden_dropout_prob)
+        self.classifier = torch.nn.Linear(config.hidden_size, config.num_labels)
 
-    def forward(self, input_ids, attention_mask):
+    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
         """Takes a batch of sentences and returns logits for sentiment classes"""
+        outputs = self.gpt(input_ids, attention_mask)
+        last_token_embedding = outputs["last_token"]  # shape: [batch_size, hidden_size]
+        x = self.dropout(last_token_embedding)
+        # Project to the number of labels (logits for each sentiment class).
+        logits = self.classifier(x)
 
-        ### TODO: The final GPT contextualized embedding is the hidden state of [CLS] token (the first token).
-        ###       HINT: You should consider what is an appropriate return value given that
-        ###       the training loop currently uses F.cross_entropy as the loss function.
-        ### YOUR CODE HERE
-        raise NotImplementedError
+        return logits
 
 
 class SentimentDataset(Dataset):
@@ -149,7 +148,9 @@ class SentimentTestDataset(Dataset):
 
 
 # Load the data: a list of (sentence, label).
-def load_data(filename, flag="train"):
+def load_data(
+    filename: str, flag: str = "train"
+) -> Union[Tuple[List, int], List]:
     num_labels = {}
     data = []
     if flag == "test":
@@ -176,7 +177,9 @@ def load_data(filename, flag="train"):
 
 
 # Evaluate the model on dev examples.
-def model_eval(dataloader, model, device):
+def model_eval(
+    dataloader: SentimentDataset, model: GPT2SentimentClassifier, device: torch.device
+) -> Tuple:
     model.eval()  # Switch to eval model, will turn off randomness like dropout.
     y_true = []
     y_pred = []
@@ -211,7 +214,9 @@ def model_eval(dataloader, model, device):
 
 
 # Evaluate the model on test examples.
-def model_test_eval(dataloader, model, device):
+def model_test_eval(
+    dataloader: SentimentDataset, model: GPT2SentimentClassifier, device: torch.device
+) -> Tuple:
     model.eval()  # Switch to eval model, will turn off randomness like dropout.
     y_pred = []
     sents = []
@@ -238,7 +243,13 @@ def model_test_eval(dataloader, model, device):
     return y_pred, sents, sent_ids
 
 
-def save_model(model, optimizer, args, config, filepath):
+def save_model(
+    model: GPT2SentimentClassifier,
+    optimizer: AdamW,
+    args: SimpleNamespace,
+    config: SimpleNamespace,
+    filepath: str,
+) -> None:
     save_info = {
         "model": model.state_dict(),
         "optim": optimizer.state_dict(),
@@ -253,7 +264,7 @@ def save_model(model, optimizer, args, config, filepath):
     print(f"save the model to {filepath}")
 
 
-def train(args):
+def train(args: SimpleNamespace) -> None:
     device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
     # Create the data and its corresponding datasets and dataloader.
     train_data, num_labels = load_data(args.train, "train")
@@ -276,15 +287,13 @@ def train(args):
     )
 
     # Init model.
-    config = {
-        "hidden_dropout_prob": args.hidden_dropout_prob,
-        "num_labels": num_labels,
-        "hidden_size": 768,
-        "data_dir": ".",
-        "fine_tune_mode": args.fine_tune_mode,
-    }
-
-    config = SimpleNamespace(**config)
+    config = SimpleNamespace(
+        hidden_dropout_prob=args.hidden_dropout_prob,
+        num_labels=num_labels,
+        hidden_size=768,
+        data_dir=".",
+        fine_tune_mode=args.fine_tune_mode,
+    )
 
     model = GPT2SentimentClassifier(config)
     model = model.to(device)
@@ -338,10 +347,10 @@ def train(args):
         )
 
 
-def test(args):
+def test(args: SimpleNamespace) -> None:
     with torch.no_grad():
         device = torch.device("cuda") if args.use_gpu else torch.device("cpu")
-        saved = torch.load(args.filepath)
+        saved = torch.load(args.filepath, weights_only=False)
         config = saved["model_config"]
         model = GPT2SentimentClassifier(config)
         model.load_state_dict(saved["model"])
@@ -388,7 +397,8 @@ def test(args):
                 f.write(f"{p}, {s} \n")
 
 
-def get_args():
+def get_args() -> argparse.Namespace:
+    """Get the command line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=11711)
     parser.add_argument("--epochs", type=int, default=10)
@@ -416,6 +426,7 @@ def get_args():
     )
 
     args = parser.parse_args()
+
     return args
 
 

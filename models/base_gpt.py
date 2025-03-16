@@ -1,21 +1,21 @@
 from torch import dtype, nn
 
-from config import PretrainedConfig
-from utils import *
+from config import GPT2Config
+from utils import get_parameter_dtype
 
 
 class GPTPreTrainedModel(nn.Module):
 
-    def __init__(self, config: PretrainedConfig, *inputs, **kwargs):
+    def __init__(self, config: GPT2Config) -> None:
         super().__init__()
         self.config = config
         self.name_or_path = config.name_or_path
 
-    def init_weights(self):
-        # Initialize weights
+    def init_weights(self) -> None:
+        """Initialize the weights"""
         self.apply(self._init_weights)
 
-    def _init_weights(self, module):
+    def _init_weights(self, module: nn.Module) -> None:
         """Initialize the weights"""
         if isinstance(module, (nn.Linear, nn.Embedding)):
             # Slightly different from the TF version which uses truncated_normal for initialization
@@ -29,4 +29,5 @@ class GPTPreTrainedModel(nn.Module):
 
     @property
     def dtype(self) -> dtype:
+        """Return the dtype of the model."""
         return get_parameter_dtype(self)

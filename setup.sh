@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-conda env create -f env.yml
-conda activate cs224n_dfp
+conda env create -f environment.yml
+conda activate gpt2
