@@ -179,8 +179,8 @@ class SonnetGPT(nn.Module):
         top_p: float = 0.9,
         max_length: int = 128,
         beam_width: int = 3,
-        length_penalty: float = 1.1,
-        repetition_penalty: float = 1.1,
+        length_penalty: float = 1.0,
+        repetition_penalty: float = 1.05,
         **kwargs,
     ) -> str:
         """Generates an original sonnet using beam search with nucleus filtering."""
@@ -512,13 +512,13 @@ def get_args() -> argparse.Namespace:
         "--length_penalty",
         type=float,
         help="Length penalty for beam search.",
-        default=1.1,
+        default=1.0,
     )
     parser.add_argument(
         "--repetition_penalty",
         type=float,
         help="Repetition penalty for beam search.",
-        default=1.1,
+        default=1.05,
     )
 
     parser.add_argument(

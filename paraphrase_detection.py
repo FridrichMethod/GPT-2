@@ -52,31 +52,31 @@ def seed_everything(seed=11711):
     torch.backends.cudnn.deterministic = True
 
 
-def get_custom_qconfig(bit_width: int):
-    # For symmetric quantization, calculate min and max.
-    # For 8-bit: quant_min = -128, quant_max = 127; for 4-bit: quant_min = -8, quant_max = 7, etc.
+def get_custom_qconfig(bit_width: int) -> QConfig:
+    """Get a custom QConfig for quantization-aware training (QAT) with the specified bit width."""
     if bit_width != 8:
         raise ValueError("Only 8-bit quantization is supported in this example.")
     quant_min = -(2 ** (bit_width - 1))
     quant_max = 2 ** (bit_width - 1) - 1
-    # Use a signed observer (MinMaxObserver with dtype=torch.qint8) for activations
+
     act_fake_quant = FakeQuantize.with_args(
         observer=MinMaxObserver,
         dtype=torch.qint8,
         quant_min=quant_min,
         quant_max=quant_max,
     )
-    # For weights, default_weight_observer is typically signed so it works as is:
+
     weight_fake_quant = FakeQuantize.with_args(
         observer=default_weight_observer,
         dtype=torch.qint8,
         quant_min=quant_min,
         quant_max=quant_max,
     )
+
     return QConfig(activation=act_fake_quant, weight=weight_fake_quant)
 
 
-def prepare_model_for_qat(model: nn.Module, qconfig: Optional[QConfig] = None):
+def prepare_model_for_qat(model: nn.Module, qconfig: Optional[QConfig] = None) -> None:
     """Prepare the given model for quantization-aware training (QAT).
 
     This sets the qconfig and inserts fake quantization modules.
@@ -87,6 +87,11 @@ def prepare_model_for_qat(model: nn.Module, qconfig: Optional[QConfig] = None):
         model.qconfig = torch.quantization.get_default_qat_qconfig("fbgemm")
     else:
         model.qconfig = qconfig
+
+    for module in model.modules():
+        if isinstance(module, nn.Embedding):
+            module.qconfig = None
+
     # Prepare the model in-place for QAT
     torch.quantization.prepare_qat(model, inplace=True)
     print("Model prepared for quantization-aware training.")
@@ -197,7 +202,6 @@ def train(args: argparse.Namespace) -> None:
     # Run for the specified number of epochs.
     for epoch in range(args.epochs):
         model.train()
-        # NEW: If quantization is enabled, prepare the GPT backbone for QAT
         if args.use_quantization:
             print("Enabling quantization-aware training for GPT-2 backbone.")
             if args.bit_width is None:
@@ -233,7 +237,7 @@ def train(args: argparse.Namespace) -> None:
 
         model.eval()
         if args.use_quantization:
-            torch.quantization.convert(model.gpt, inplace=True)
+            torch.quantization.convert(model, inplace=True)
         dev_acc, *_ = model_eval_paraphrase(para_dev_dataloader, model, device)
 
         if dev_acc > best_dev_acc:
@@ -256,7 +260,7 @@ def test(args: argparse.Namespace) -> None:
     model = model.to(device)
     model.eval()
     if args.use_quantization:
-        torch.quantization.convert(model.gpt, inplace=True)
+        torch.quantization.convert(model, inplace=True)
     print(f"Loaded model to test from {args.filepath}")
 
     para_dev_data = load_paraphrase_data(args.para_dev)
@@ -365,10 +369,7 @@ def add_arguments(args: argparse.Namespace) -> argparse.Namespace:
         raise ValueError(f"{args.model_size} is not supported.")
 
     if args.use_lora:
-        # args.lora_r = 8
-        # args.lora_alpha = 32
-        # args.lora_dropout = 0.1
-        args.lora_r = 16
+        args.lora_r = 8
         args.lora_alpha = 32
         args.lora_dropout = 0.1
 

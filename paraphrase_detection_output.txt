@@ -1,2 +1,0 @@
-Loaded 283003 train examples from data/quora-train.csv
-Loaded 40429 train examples from data/quora-dev.csv
