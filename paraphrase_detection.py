@@ -12,6 +12,7 @@ trains and evaluates your ParaphraseGPT model and writes the required submission
 
 import argparse
 import random
+import time
 from typing import Optional
 
 import numpy as np
@@ -210,8 +211,11 @@ def train(args: argparse.Namespace) -> None:
                 prepare_model_for_qat(model, get_custom_qconfig(args.bit_width))
         train_loss = 0
         num_batches = 0
+        t0 = time.perf_counter()
         for batch in tqdm(
-            para_train_dataloader, desc=f"train-{epoch}", disable=TQDM_DISABLE
+            para_train_dataloader,
+            desc=f"train-{epoch}",
+            disable=TQDM_DISABLE,
         ):
             # Get the input and move it to the gpu (I do not recommend training this model on CPU).
             b_ids, b_mask, labels = (
@@ -230,8 +234,21 @@ def train(args: argparse.Namespace) -> None:
             loss.backward()
             optimizer.step()
 
+            dt = time.perf_counter() - t0
+
             train_loss += loss.item()
             num_batches += 1
+
+            if num_batches % 50 == 0:
+                print(f"Estimate speed: {num_batches / dt:.4f} it/s", flush=True)
+                print(
+                    f"Batch memory allocated: {torch.cuda.memory_allocated()/1024**2:.2f} MB",
+                    flush=True,
+                )
+                print(
+                    f"Batch memory reserved: {torch.cuda.memory_reserved()/1024**2:.2f} MB",
+                    flush=True,
+                )
 
         train_loss = train_loss / num_batches
 
